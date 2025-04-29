@@ -55,6 +55,7 @@ const register = async (req, res, next) => {
 
 // Login user
 const login = async (req, res, next) => {
+    console.log("login");
     try {
         const { email, password } = req.body;
 
@@ -102,10 +103,10 @@ const forgotPassword = async (req, res, next) => {
             throw new NotFoundError("User not found");
         }
 
-        // Generate reset token
-        const resetToken = crypto.randomBytes(20).toString("hex");
+        // Generate 6-digit PIN
+        const resetPin = Math.floor(100000 + Math.random() * 900000).toString();
         await user.update({
-            resetPasswordToken: resetToken,
+            resetPasswordToken: resetPin,
             resetPasswordExpires: new Date(Date.now() + 3600000) // 1 hour
         });
 
@@ -113,37 +114,62 @@ const forgotPassword = async (req, res, next) => {
         // For now, we'll just return the token (in production, send via email)
         res.json({
             message: "Password reset token generated",
-            resetToken,
+            resetPin,
         });
     } catch (error) {
         next(error);
     }
 };
-
-// Reset password
-const resetPassword = async (req, res, next) => {
+// otp
+const verifyOTP = async (req, res, next) => {
     try {
-        const { resetToken, newPassword } = req.body;
-
-        if (!resetToken || !newPassword) {
-            throw new ValidationError("Reset token and new password are required");
+        const { email, otp } = req.body;
+        console.log("email,otp---------------------------",email,otp);
+        if (!otp || !email) {
+            throw new ValidationError("OTP and email are required");
         }
-
-        // Find user with valid reset token
         const user = await User.findOne({
             where: {
-                resetPasswordToken: resetToken,
+                resetPasswordToken: otp,
                 resetPasswordExpires: {
                     [Op.gt]: new Date()
-                }
+                },
+                email: email
             }
         });
 
         if (!user) {
-            throw new ValidationError("Invalid or expired reset token");
+            throw new ValidationError("Invalid or expired reset pin");
+        }
+        res.json({ message: "OTP verified successfully" });
+    } catch (error) {
+        next(error);
+    }
+}
+
+// Reset password
+const resetPassword = async (req, res, next) => {
+    try {
+        const {   newPassword ,email} = req.body;
+        console.log("email,newPassword",email,newPassword);
+        if (!email || !newPassword) {
+            throw new ValidationError("Email and new password are required");
         }
 
-        // Update password and clear reset token
+        // Find user with valid emaik
+
+        const user = await User.findOne({
+            where: {
+               
+                email: email
+            }
+        });
+
+        if (!user) {
+            throw new ValidationError("Invalid email");
+        }
+
+        // Update password and clear reset pin
         await user.update({
             password: newPassword,
             resetPasswordToken: null,
@@ -161,4 +187,5 @@ module.exports = {
     login,
     forgotPassword,
     resetPassword,
+    verifyOTP
 };
